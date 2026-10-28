@@ -36,5 +36,3 @@ Thumbs.db
 # Notebooks checkpoints
 .ipynb_checkpoints/
 
-# Reference papers (link to arXiv instead of redistributing the PDF)
-*.pdf
