@@ -473,4 +473,3 @@ All randomness is seeded (`set_seed(42)`; synthetic generator seed 42), so rerun
 
 ---
 
-*AI assistance: see section 8 of the [README](../README.md#8-ai-assistance-disclosure).*
