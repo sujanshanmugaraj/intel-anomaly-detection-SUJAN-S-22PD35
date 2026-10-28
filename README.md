@@ -287,18 +287,9 @@ The pretrained WideResNet50 weights are downloaded automatically by torchvision 
 
 ---
 
-## 8. AI assistance disclosure
 
-The task allowed using an LLM for searching and for help when stuck. In that spirit, I want to be clear about where an AI assistant (Claude) was used:
-- writing `scripts/visualize_heatmaps.py` (the heatmap screenshot script) and the shared colour scale fix in it;
-- spotting and fixing a bug where `generate_synthetic_defects.py` also scored the saved `*_mask.png` files as defect images (this had inflated an earlier synthetic AUROC), and cleaning up stale outputs from an older version of the generator;
-- running the evaluations, comparing the code against the PatchCore paper, and helping structure this README and the documentation.
 
-_<Add anything else here that is relevant — e.g. other tools or references used.>_
-
----
-
-## 9. References
+## 8. References
 
 1. K. Roth, L. Pemula, J. Zepeda, B. Schölkopf, T. Brox, P. Gehler. **Towards Total Recall in Industrial Anomaly Detection.** CVPR 2022. [arXiv:2106.08265](https://arxiv.org/abs/2106.08265)
 2. P. Bergmann, M. Fauser, D. Sattlegger, C. Steger. **MVTec AD — A Comprehensive Real-World Dataset for Unsupervised Anomaly Detection.** CVPR 2019. Dataset licence: CC BY-NC-SA 4.0 (see `data/raw/transistor/license.txt`).
