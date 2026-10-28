@@ -1,5 +1,8 @@
 # Visual Anomaly Detection for Chip / Package Inspection (PatchCore)
 
+## Name: Sujan S 
+## Roll No: 22PD35
+
 This project detects visual anomalies — foreign objects such as a strand of hair, cracks, dust / sand particles and excess adhesive — on images of electronic components, **using only images of good parts for training**.
 
 It is a simplified implementation of **PatchCore** ([Roth et al., *Towards Total Recall in Industrial Anomaly Detection*, CVPR 2022](https://arxiv.org/abs/2106.08265)), evaluated on the public **MVTec AD `transistor`** dataset. On top of the paper, I added a **synthetic defect generator** that creates the specific defect types from the problem statement (hair, crack, dust, adhesive blob), so the detector could be tested on those scenarios even though real factory images could not be shared.
