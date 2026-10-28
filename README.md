@@ -4,7 +4,7 @@ This project detects visual anomalies — foreign objects such as a strand of ha
 
 It is a simplified implementation of **PatchCore** ([Roth et al., *Towards Total Recall in Industrial Anomaly Detection*, CVPR 2022](https://arxiv.org/abs/2106.08265)), evaluated on the public **MVTec AD `transistor`** dataset. On top of the paper, I added a **synthetic defect generator** that creates the specific defect types from the problem statement (hair, crack, dust, adhesive blob), so the detector could be tested on those scenarios even though real factory images could not be shared.
 
-📄 Full step-by-step write-up: **[docs/END_TO_END_DOCUMENTATION.md](docs/END_TO_END_DOCUMENTATION.md)**
+📄 Full step-by-step write-up: **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)**
 
 ---
 
@@ -278,7 +278,7 @@ The pretrained WideResNet50 weights are downloaded automatically by torchvision 
 ├── tests/test_synthetic_defects.py
 ├── experiments/synthetic_defects/transistor/{hair,crack,blob,speckle}/   generated images + masks (not committed — recreate with generate_synthetic_defects.py)
 ├── docs/
-│   ├── END_TO_END_DOCUMENTATION.md
+│   ├── DOCUMENTATION.md
 │   ├── images/                   screenshots used in this README
 │   └── run_logs/                 raw output of every run
 ├── data/raw/transistor/          dataset (not committed)
