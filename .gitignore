@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Data and outputs
+results/
+!results/.gitkeep
+experiments/artifacts/
+
+data/*
+!data/README.md
+!data/.gitkeep
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
