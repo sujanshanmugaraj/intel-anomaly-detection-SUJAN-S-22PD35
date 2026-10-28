@@ -40,8 +40,10 @@ class PatchCoreModel:
 
             weights = Wide_ResNet50_2_Weights.IMAGENET1K_V2
             model = models.wide_resnet50_2(weights=weights)
-        except Exception:
-            model = models.wide_resnet50_2(weights=None)
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to load pretrained WideResNet50_2 weights; refusing to silently fall back to random weights."
+            ) from exc
         for param in model.parameters():
             param.requires_grad = False
         return model
@@ -95,13 +97,14 @@ class PatchCoreModel:
             return vectors
 
         selected_idx = [0]
+        min_dist = torch.cdist(vectors, vectors[[0]], p=2.0).squeeze(1)
         for _ in range(1, min(target_size, vectors.shape[0])):
-            dists = torch.cdist(vectors, vectors[selected_idx], p=2.0)
-            min_dist = dists.min(dim=1).values
-            min_dist[selected_idx] = -torch.inf
-            idx = int(torch.argmax(min_dist).item())
-            selected_idx.append(idx)
-
+            next_idx = int(torch.argmax(min_dist).item())
+            selected_idx.append(next_idx)
+            new_dists = torch.cdist(vectors, vectors[[next_idx]], p=2.0).squeeze(1)
+            min_dist = torch.minimum(min_dist, new_dists)
+            min_dist[next_idx] = -torch.inf
+ 
         return vectors[selected_idx]
 
     def score_image(self, image: Image.Image, memory_bank: Tensor) -> tuple[Tensor, float]:
@@ -173,11 +176,8 @@ def pixel_auroc_from_heatmaps(labels: Sequence[int], heatmaps: Sequence[Tensor],
     flattened_labels: list[int] = []
     flattened_scores: list[float] = []
     for label, heatmap, mask in zip(labels, heatmaps, masks):
-        heat_flat = heatmap.detach().flatten().cpu().numpy()
-        mask_flat = mask.detach().flatten().cpu().numpy().astype(float)
-        flattened_labels.extend([int(label)] * len(heat_flat))
+        heat_flat = heatmap.detach().flatten().cpu().numpy().astype(float)
+        mask_flat = mask.detach().flatten().cpu().numpy().astype(int)
         flattened_scores.extend(heat_flat.tolist())
-        flattened_labels.extend([int(label)] * len(mask_flat))
-        flattened_scores.extend(mask_flat.tolist())
-    # The intensity list contains heatmap and mask values; this is used only for checking alignment in the script.
-    return float(roc_auc_score(np.asarray(flattened_labels), np.asarray(flattened_scores)))
+        flattened_labels.extend(mask_flat.tolist())
+    return float(roc_auc_score(np.asarray(flattened_labels, dtype=int), np.asarray(flattened_scores, dtype=float)))

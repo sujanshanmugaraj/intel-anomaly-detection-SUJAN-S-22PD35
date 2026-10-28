@@ -1,0 +1,5 @@
+Generated synthetic files: 96
+Synthetic defect types: ('blob', 'hair', 'crack', 'speckle')
+Image AUROC on clean-vs-synthetic: 1.0000
+Saved synthetic set to: <project-root>\experiments\synthetic_defects\transistor
+exit=0

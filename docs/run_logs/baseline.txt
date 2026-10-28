@@ -1,0 +1,14 @@
+Loading pretrained WideResNet50 backbone...
+Train images: 213
+Stage2 shape: (512, 32, 32)
+Stage3 shape: (1024, 16, 16)
+Patch vector count: 1024
+Memory bank shape: (512, 1536)
+Evaluation items: 100
+Image AUROC: 0.9979
+Pixel AUROC: 0.9314
+PatchCore baseline evaluation complete.
+
+real	10m24.394s
+user	0m0.030s
+sys	0m0.000s

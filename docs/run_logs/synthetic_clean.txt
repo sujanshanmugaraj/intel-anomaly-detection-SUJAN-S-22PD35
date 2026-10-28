@@ -1,0 +1,6 @@
+clean images: 16
+blob     easy=1.000(n=8)  medium=1.000(n=8)  hard=1.000(n=8)
+hair     easy=1.000(n=8)  medium=1.000(n=8)  hard=1.000(n=8)
+crack    easy=1.000(n=8)  medium=1.000(n=8)  hard=1.000(n=8)
+speckle  easy=1.000(n=8)  medium=1.000(n=8)  hard=1.000(n=8)
+OVERALL clean-vs-synthetic AUROC (masks and stale files excluded, n=96): 1.0000

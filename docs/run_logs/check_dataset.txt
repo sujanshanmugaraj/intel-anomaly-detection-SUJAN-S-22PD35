@@ -1,0 +1,7 @@
+Dataset root: <project-root>\data\raw
+Detected categories: ['transistor']
+
+Category: transistor
+  train_count=213
+  test_count=100
+  defect_types=['bent_lead', 'cut_lead', 'damaged_case', 'misplaced']

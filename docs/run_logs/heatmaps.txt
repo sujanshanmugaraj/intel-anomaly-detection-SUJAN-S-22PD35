@@ -1,0 +1,10 @@
+good (real)                  score=17.769
+bent_lead (real)             score=22.717
+cut_lead (real)              score=20.802
+damaged_case (real)          score=21.397
+misplaced (real)             score=20.208
+hair (synthetic)             score=21.266
+crack (synthetic)            score=27.434
+blob (synthetic)             score=24.739
+speckle (synthetic)          score=22.068
+Saved heatmap figure to: <project-root>\results\heatmaps_transistor.png

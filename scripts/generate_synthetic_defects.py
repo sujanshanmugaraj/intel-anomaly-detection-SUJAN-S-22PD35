@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 from sklearn.metrics import roc_auc_score
 
@@ -19,15 +18,24 @@ from src.synthetic_defects import generate_synthetic_dataset
 def main() -> None:
     set_seed(42)
     category = "transistor"
-    train_dir = DATA_ROOT / category / "train" / "good"
+    category_dir = DATA_ROOT / category
+    train_dir = category_dir / "train" / "good"
+    test_good_dir = category_dir / "test" / "good"
     if not train_dir.exists():
         raise FileNotFoundError(f"Training directory not found: {train_dir}")
 
     output_dir = ROOT / "experiments" / "synthetic_defects" / category
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    defect_types = ("blob", "scratch", "line", "stain", "speckle")
-    created = generate_synthetic_dataset(train_dir, output_dir, defect_types=defect_types, images_per_type=8, seed=42)
+    defect_types = ("blob", "hair", "crack", "speckle")
+    created = generate_synthetic_dataset(
+        train_dir,
+        output_dir,
+        defect_types=defect_types,
+        images_per_type=8,
+        seed=42,
+        difficulty_levels=("easy", "medium", "hard"),
+    )
 
     model = PatchCoreModel(resize=256, coreset_size=256)
     train_images = [Image.open(p).convert("RGB") for p in sorted(train_dir.glob("*.png"))[:80]]
@@ -38,13 +46,16 @@ def main() -> None:
     for defect_dir in sorted(output_dir.iterdir()):
         if not defect_dir.is_dir():
             continue
-        for image_path in sorted(defect_dir.glob("*.png"))[:8]:
+        for image_path in sorted(defect_dir.glob("*.png")):
+            if image_path.stem.endswith("_mask"):
+                continue
             image = Image.open(image_path).convert("RGB")
             _, score = model.score_image(image, memory_bank)
             labels.append(1)
             scores.append(score)
 
-    for image_path in sorted(train_dir.glob("*.png"))[:16]:
+    normal_images = sorted(test_good_dir.glob("*.png")) if test_good_dir.exists() else sorted(train_dir.glob("*.png"))[:16]
+    for image_path in normal_images[:16]:
         image = Image.open(image_path).convert("RGB")
         _, score = model.score_image(image, memory_bank)
         labels.append(0)

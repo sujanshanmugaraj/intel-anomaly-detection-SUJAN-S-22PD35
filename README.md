@@ -1,223 +1,335 @@
-# Chip/Package Anomaly Detection with PatchCore
+# Visual Anomaly Detection for Chip / Package Inspection (PatchCore)
 
-This project implements a PatchCore-style anomaly detection pipeline for chip/package images, with a strong verified baseline and a synthetic defect robustness evaluation. It was built as a practical hackathon-ready pipeline for real-world defect detection and localization on semiconductor-related imagery.
+> **Author(s):** _<fill in your name(s) — and list every teammate who contributed>_
+> **Submission for:** Anomaly detection on high-resolution manufacturing images (hackathon / interview task)
 
-## Why this project
+This project detects visual anomalies — foreign objects such as a strand of hair, cracks, dust / sand particles and excess adhesive — on images of electronic components, **using only images of good parts for training**.
 
-Modern manufacturing and semiconductor inspection rely on detecting small, subtle, and often rare defects in images of chips, packages, or board components. Traditional rule-based pipeline inspection can be brittle, while deep feature-based anomaly detection is much more flexible and scalable.
+It is a simplified implementation of **PatchCore** ([Roth et al., *Towards Total Recall in Industrial Anomaly Detection*, CVPR 2022](https://arxiv.org/abs/2106.08265)), evaluated on the public **MVTec AD `transistor`** dataset. On top of the paper, I added a **synthetic defect generator** that creates the specific defect types from the problem statement (hair, crack, dust, adhesive blob), so the detector could be tested on those scenarios even though real factory images could not be shared.
 
-This project targets that gap by using a pretrained feature extractor and a PatchCore memory bank of normal patterns, then scoring anomalies against this learned normal representation.
+📄 Full step-by-step write-up: **[docs/END_TO_END_DOCUMENTATION.md](docs/END_TO_END_DOCUMENTATION.md)**
 
-## What was implemented
+---
 
-The project includes the full workflow for:
+## 1. Results at a glance
 
-- validating a local dataset,
-- checking the folder structure and counts,
-- generating a contact sheet for image QA,
-- confirming the PatchCore feature extraction path,
-- evaluating anomaly detection on real defect data,
-- generating synthetic anomalies to test robustness,
-- and documenting the workflow end-to-end.
+| Evaluation | Images | Metric | Result |
+|---|---|---|---:|
+| Real defects (MVTec AD transistor) — *is the image defective?* | 60 good + 40 defective | Image AUROC | **0.9979** |
+| Real defects — *where is the defect?* | 40 defective, pixel masks | Pixel AUROC | **0.9314** |
+| Synthetic hair / crack / dust / adhesive vs clean | 96 synthetic + 16 good | Image AUROC | **1.0000** |
+| Unit tests | 4 tests | pass / fail | **4 / 4 passed** |
 
-## Project architecture
+All numbers above were produced by the scripts in this repo on CPU; the raw console output of every run is saved in [`docs/run_logs/`](docs/run_logs/).
 
-- `src/config.py`: project and dataset root configuration
-- `src/dataset_loader.py`: dataset discovery and metadata helpers
-- `src/patchcore.py`: PatchCore implementation and scoring logic
-- `src/synthetic_defects.py`: synthetic defect generator for robustness testing
-- `scripts/check_dataset.py`: dataset validation and counts
-- `scripts/contact_sheet.py`: preview visual QA of normal and defective samples
-- `scripts/run_patchcore_baseline.py`: full image-level and pixel-level evaluation
-- `scripts/generate_synthetic_defects.py`: synthetic anomalies and evaluation loop
-- `tests/test_synthetic_defects.py`: lightweight validation tests
+> ⚠️ **Honest reading of these numbers:** 0.9979 / 0.9314 are on a public benchmark, not on real Intel package images. The synthetic score of 1.0 means my synthetic defects are **too easy** (high contrast, small test set), not that the detector is perfect — see [Limitations](#7-limitations-and-what-i-would-do-next).
 
-## Verified results
+### Output: what the detector sees
 
-The pipeline was validated in a clean Python environment with these results on the transistor category:
+Each row: input image → anomaly heatmap (blue = normal, red = anomaly) → ground-truth mask (real defects) or raw score map (synthetic defects). The clean image at the top stays blue; every defect lights up where it is.
 
-- Image AUROC: 0.9979
-- Pixel AUROC: 0.9314
-- Synthetic clean-vs-defect AUROC: 0.9859
-- Test status: 2 tests passed
+![Detection output](docs/images/heatmaps_transistor.png)
 
-These metrics indicate a strong anomaly detection baseline on real defects and a good robustness signal under synthetic defect generation.
+More outputs (synthetic defect samples, dataset overview) are in [section 4](#4-output-screenshots).
 
-## Folder structure
+---
+
+## Research paper explored
+
+**PatchCore — *Towards Total Recall in Industrial Anomaly Detection***
+Karsten Roth, Latha Pemula, Joaquin Zepeda, Bernhard Schölkopf, Thomas Brox, Peter Gehler — CVPR 2022 — [arXiv:2106.08265](https://arxiv.org/abs/2106.08265)
+
+What I took from the paper:
+- the idea of building a **memory bank of normal patch features** from a frozen, ImageNet-pretrained WideResNet50, so no defect images are needed for training;
+- using **mid-level features (layer2 + layer3)** with **3×3 local neighbourhood aggregation**;
+- **greedy coreset subsampling** to shrink the memory bank;
+- scoring by **nearest-neighbour distance**, giving both an image score and a localisation heatmap.
+
+I implemented a simplified version of the method; the exact differences are listed in [section 3](#differences-from-the-original-paper-simplifications).
+
+## My contribution and ideas added on top of the paper
+
+The paper only evaluates on the defect types that come with the MVTec dataset. The problem statement asks about **hair, cracks, dust and excess adhesive**, which are not in that dataset. My additions bridge that gap:
+
+1. **Problem-specific synthetic defect generator** ([`src/synthetic_defects.py`](src/synthetic_defects.py)) — generates the defects named in the problem statement on top of good images: `hair` (foreign object), `crack`, `speckle` (dust / sand) and `blob` (excess adhesive), each with a saved pixel mask.
+2. **Difficulty levels** — every defect is generated at `easy`, `medium` and `hard` (size × 0.75 / 1.0 / 1.35 and increasing intensity), in both bright and dark variants, to test how robust the detector is rather than reporting one number.
+3. **Robustness evaluation** ([`scripts/generate_synthetic_defects.py`](scripts/generate_synthetic_defects.py)) — clean-vs-synthetic AUROC, broken down by defect type and difficulty.
+4. **Reliability fixes in the PatchCore code** — the backbone now refuses to run with random weights if the pretrained weights fail to load; the greedy coreset keeps a running minimum distance so it only computes distances to the newly added point each step (much faster on 218k vectors); the pixel AUROC helper was corrected to use mask pixels as labels.
+5. **Unit tests** checking the defect generator, the coreset on a hand-worked example and AUROC against a hand-computed value.
+6. **Mapping to the real use case** — the table in section 2 links each production anomaly to the defect type used to test it.
+
+**Ideas to add on next** (not yet implemented):
+- **Tiled high-resolution scoring** — score the full 1024×1024 image in overlapping tiles so a thin hair or a single dust grain is not lost when downscaling to 256×256.
+- **Realistic, low-contrast defects** — curved, blurred hair; cracks that follow surface texture; adhesive modelled as a slightly wider existing glue bead — then plot detection rate against defect contrast to find the detection limit.
+- **Excess-adhesive as a shape check** — for "too much gum", compare the glue region's area/outline with the expected one, since a patch-feature method may miss a small volume increase.
+- **Operating threshold** — pick a threshold on validation data and report miss rate and false alarms per 1000 parts, which is what a production line needs.
+- **Complete the paper** — Gaussian heatmap smoothing, 1 % coreset with random projection, centre crop and re-weighted image score, to improve pixel AUROC.
+- **Speed** — FAISS nearest-neighbour search and GPU inference for line-rate inspection.
+
+---
+
+## 2. The problem and how this project maps to it
+
+The task: high-resolution photos are taken between manufacturing steps; detect when something is wrong with the package surface. Defective examples are rare and varied, so the method must work **without labelled defect images**.
+
+| Anomaly in the problem statement | How it is covered here |
+|---|---|
+| Foreign object — **strand of human hair** | Synthetic `hair` defect (thin straight line, 3–5 px wide on a 1024 px image) |
+| **Crack** on the surface | Synthetic `crack` defect (branching polyline) + real `damaged_case` images |
+| **Dust / sand particles** | Synthetic `speckle` defect (5–30 small spots) |
+| **Too much adhesive / gum** | Synthetic `blob` defect (soft elliptical stain) — an approximation |
+| Other real-world defects | Real MVTec classes: `bent_lead`, `cut_lead`, `damaged_case`, `misplaced` |
+
+**Why the transistor dataset?** The real factory images are confidential, so I used [MVTec AD](https://www.mvtec.com/company/research/datasets/mvtec-ad), the standard public benchmark for industrial anomaly detection. Its `transistor` category is the closest to a chip package: a black plastic body with metal leads on a board, photographed from above at 1024×1024.
+
+---
+
+## 3. Approach (PatchCore in short)
+
+```
+ Training (good images only)                     Testing (any image)
+ ───────────────────────────                     ───────────────────
+ good image ─► WideResNet50 (frozen,             test image ─► same feature extractor
+               ImageNet weights)                                    │
+               │                                                    ▼
+               ▼                                        1024 patch vectors
+   layer2 (32×32) + layer3 (16×16 → upsampled)                     │
+               │  3×3 local average (neighbourhood)                 ▼
+               ▼                                     distance of every patch to its
+   1024 patch vectors × 1536 dims per image          nearest neighbour in the memory bank
+               │                                                    │
+               ▼                                     ┌──────────────┴──────────────┐
+   218k vectors ─► greedy coreset ─► memory bank     ▼                             ▼
+                                    (512 × 1536)  max patch distance        32×32 distance map
+                                                  = image anomaly score     upsampled = heatmap
+```
+
+1. **Feature extraction.** A pretrained WideResNet50 is used as a frozen feature extractor — no training. Features from the mid-level blocks (layer2 and layer3) are taken because they capture local texture and shape without being too specific to ImageNet classes.
+2. **Neighbourhood aggregation.** Each feature is averaged with its 3×3 neighbours so every patch vector carries some spatial context.
+3. **Memory bank.** All patch vectors from the 213 good training images (~218 000 vectors) are reduced to 512 representative vectors with **greedy coreset subsampling** (repeatedly pick the vector farthest from everything picked so far).
+4. **Scoring.** For a new image, each patch is compared to its nearest neighbour in the memory bank. A patch that looks unlike anything seen in good images gets a high distance. The **largest patch distance is the image score**; the full distance map, upsampled to the image size, is the **heatmap**.
+
+### What I added beyond the paper
+- **Synthetic defect generator** ([`src/synthetic_defects.py`](src/synthetic_defects.py)): `hair`, `crack`, `speckle` (dust) and `blob` (adhesive) at three difficulty levels (easy / medium / hard), bright or dark, with a saved pixel mask for every image.
+- **Robustness evaluation** ([`scripts/generate_synthetic_defects.py`](scripts/generate_synthetic_defects.py)): clean-vs-synthetic AUROC, broken down per defect type and difficulty.
+- **Heatmap visualisation** ([`scripts/visualize_heatmaps.py`](scripts/visualize_heatmaps.py)) with one shared colour scale across all images.
+
+### Differences from the original paper (simplifications)
+
+| PatchCore paper | This implementation |
+|---|---|
+| Resize to 256, centre-crop to 224 | Resize to 256, no crop |
+| Coreset = 1–10 % of all patches | Fixed 512 patches (≈ 0.2 %) |
+| Random projection to speed up coreset search | Exact distances |
+| Image score re-weighted by neighbourhood (Eq. 7) | Plain maximum patch distance |
+| Heatmap smoothed with Gaussian σ = 4 | No smoothing |
+
+---
+
+## 4. Output screenshots
+
+### 4.1 Detection heatmaps (real and synthetic defects)
+
+Left: input image and its anomaly score. Middle: anomaly heatmap over the image (blue = normal, red = anomalous). Right: ground-truth mask for real defects, or the raw score map for synthetic ones. **All rows share the same colour scale**, so the clean image correctly stays blue.
+
+![Anomaly heatmaps](docs/images/heatmaps_transistor.png)
+
+Scores for the images in the figure ([`docs/run_logs/heatmaps.txt`](docs/run_logs/heatmaps.txt)):
+
+| Image | Type | Anomaly score | Detected where? |
+|---|---|---:|---|
+| good | real, normal | **17.77** | nothing highlighted ✅ |
+| bent_lead | real defect | 22.72 | bent lead, bottom-left ✅ |
+| cut_lead | real defect | 20.80 | cut lead, bottom ✅ |
+| damaged_case | real defect | 21.40 | chipped corner of case ✅ |
+| misplaced | real defect | 20.21 | diffuse over whole part (expected — the whole object is out of place) |
+| hair | synthetic | 21.27 | along the hair strand ✅ (weakest signal — thin) |
+| crack | synthetic | 27.43 | whole crack path ✅ |
+| blob (adhesive) | synthetic | 24.74 | blob, bottom-left ✅ |
+| speckle (dust) | synthetic | 22.07 | individual particles ✅ |
+
+### 4.2 Synthetic defects generated for the problem statement
+
+Rows: hair, crack, blob (adhesive), speckle (dust). Columns: easy, medium, hard.
+
+![Synthetic defects](docs/images/synthetic_defects_grid.png)
+
+### 4.3 Dataset contact sheet (visual sanity check)
+
+Top: normal transistors. Bottom: real defects with the ground-truth mask overlaid in red.
+
+![Contact sheet](docs/images/contact_sheet_transistor.png)
+
+---
+
+## 5. All run outputs
+
+<details open>
+<summary><b>Dataset check</b> — <code>scripts/check_dataset.py</code></summary>
+
+```text
+Dataset root: ...\Anomaly detection\data\raw
+Detected categories: ['transistor']
+
+Category: transistor
+  train_count=213
+  test_count=100
+  defect_types=['bent_lead', 'cut_lead', 'damaged_case', 'misplaced']
+```
+Test split: 60 good, 10 each of bent_lead / cut_lead / damaged_case / misplaced.
+</details>
+
+<details open>
+<summary><b>PatchCore baseline on real defects</b> — <code>scripts/run_patchcore_baseline.py</code> (10 min 24 s on CPU)</summary>
+
+```text
+Loading pretrained WideResNet50 backbone...
+Train images: 213
+Stage2 shape: (512, 32, 32)
+Stage3 shape: (1024, 16, 16)
+Patch vector count: 1024
+Memory bank shape: (512, 1536)
+Evaluation items: 100
+Image AUROC: 0.9979
+Pixel AUROC: 0.9314
+PatchCore baseline evaluation complete.
+```
+</details>
+
+<details open>
+<summary><b>Synthetic defect evaluation</b> — <code>scripts/generate_synthetic_defects.py</code> (3 min 11 s on CPU)</summary>
+
+```text
+Generated synthetic files: 96
+Synthetic defect types: ('blob', 'hair', 'crack', 'speckle')
+Image AUROC on clean-vs-synthetic: 1.0000
+```
+Memory bank: 80 training images, coreset 256. Negatives: 16 good test images.
+</details>
+
+<details open>
+<summary><b>Synthetic AUROC by defect type and difficulty</b></summary>
+
+| Defect | Easy | Medium | Hard | Images |
+|---|---:|---:|---:|---:|
+| hair (foreign object) | 1.000 | 1.000 | 1.000 | 24 |
+| crack | 1.000 | 1.000 | 1.000 | 24 |
+| speckle (dust / sand) | 1.000 | 1.000 | 1.000 | 24 |
+| blob (excess adhesive) | 1.000 | 1.000 | 1.000 | 24 |
+| **All** | | | | **96 → 1.0000** |
+
+Source: [`docs/run_logs/synthetic_clean.txt`](docs/run_logs/synthetic_clean.txt)
+</details>
+
+<details open>
+<summary><b>Unit tests</b> — <code>python -m unittest discover -s tests</code></summary>
+
+```text
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.028s
+
+OK
+```
+Tests cover: defect mask shape, defect only changes masked pixels, greedy coreset on a hand-made 1-D example, AUROC against a hand-computed value.
+</details>
+
+---
+
+## 6. How to run
+
+**Environment used for the results above:** Windows 11, Python 3.12.3, CPU only (no CUDA). Exact package versions are printed by `scripts/print_env.py`.
+
+```powershell
+# 1. create environment
+python -m venv venv
+.\venv\Scripts\python -m pip install --upgrade pip
+.\venv\Scripts\python -m pip install -r requirements.txt
+
+# 2. put MVTec AD "transistor" at data\raw\transistor  (or set $env:ANOMALY_DATA_DIR)
+
+# 3. run
+.\venv\Scripts\python scripts\check_dataset.py               # dataset counts
+.\venv\Scripts\python scripts\contact_sheet.py               # visual QA image
+.\venv\Scripts\python scripts\run_patchcore_baseline.py      # real-defect AUROC (~10 min CPU)
+.\venv\Scripts\python scripts\generate_synthetic_defects.py  # synthetic AUROC (~3 min CPU)
+.\venv\Scripts\python scripts\visualize_heatmaps.py          # heatmap screenshot (~10 min CPU)
+.\venv\Scripts\python -m unittest discover -s tests          # tests
+```
+
+Expected dataset layout:
+
+```text
+data/raw/transistor/
+├── train/good/                 213 images
+├── test/{good, bent_lead, cut_lead, damaged_case, misplaced}/
+└── ground_truth/{bent_lead, cut_lead, damaged_case, misplaced}/
+```
+
+The pretrained WideResNet50 weights are downloaded automatically by torchvision on first run. The code refuses to fall back to random weights if the download fails.
+
+---
+
+## 7. Limitations and what I would do next
+
+**Limitations (being upfront about how far I got):**
+- **No real Intel package images.** All results are on a public transistor dataset plus synthetic defects. Performance on real package surfaces is unknown.
+- **Excess adhesive is only approximated** by a soft blob. Real over-applied adhesive is a shape/volume change at a specific location, which may look subtler.
+- **Synthetic defects are too easy.** They are drawn with strong contrast, so every difficulty level reaches AUROC 1.0. The hair defect has the smallest margin (score 21.3 vs 17.8 for a clean image), so a faint, thin hair is the most likely real-world miss.
+- **Small synthetic test set:** 96 defective vs 16 clean images.
+- **No decision threshold chosen.** AUROC measures ranking; deploying this needs a threshold set on validation data for an acceptable false-alarm rate.
+- **CPU only:** the full real-defect run (memory bank from 213 images + scoring 100 images) takes ~10 minutes.
+
+**Next steps:**
+1. Add the missing paper components: Gaussian smoothing of the heatmap, larger coreset (1 %), centre crop, re-weighted image score.
+2. Make synthetic defects more realistic: low-contrast hair, cracks that follow surface texture, adhesive that changes the outline of an existing glue line.
+3. Choose and report an operating threshold (precision / recall, false alarms per 1000 parts).
+4. Evaluate on more MVTec categories, and on real package images if they can be shared.
+5. Speed up nearest-neighbour search with FAISS (already in `requirements.txt`) and run on GPU.
+
+---
+
+## 8. Project structure
 
 ```text
 .
-├── data/
-│   └── raw/
-│       └── mvtec_ad/
-│           └── transistor/
-├── docs/
-│   └── END_TO_END_DOCUMENTATION.md
-├── experiments/
-│   └── synthetic_defects/
-├── results/
-│   ├── benchmark_summary.md
-│   └── contact_sheet_transistor.png
-├── scripts/
-│   ├── check_dataset.py
-│   ├── contact_sheet.py
-│   ├── generate_synthetic_defects.py
-│   └── run_patchcore_baseline.py
 ├── src/
-│   ├── config.py
-│   ├── dataset_loader.py
-│   ├── patchcore.py
-│   └── synthetic_defects.py
-├── tests/
-│   └── test_synthetic_defects.py
-├── README.md
-├── requirements.txt
-├── LOG.md
-└── .venv/
+│   ├── config.py                 dataset root (data/raw or $ANOMALY_DATA_DIR)
+│   ├── dataset_loader.py         MVTec folder discovery, masks, counts
+│   ├── patchcore.py              PatchCore: features, coreset, memory bank, scoring, heatmaps
+│   └── synthetic_defects.py      hair / crack / speckle / blob generator
+├── scripts/
+│   ├── check_dataset.py          dataset validation
+│   ├── contact_sheet.py          visual QA image
+│   ├── run_patchcore_baseline.py real-defect image + pixel AUROC
+│   ├── generate_synthetic_defects.py  synthetic defects + AUROC
+│   ├── visualize_heatmaps.py     heatmap screenshot
+│   └── print_env.py              environment versions
+├── tests/test_synthetic_defects.py
+├── experiments/synthetic_defects/transistor/{hair,crack,blob,speckle}/   generated images + masks (not committed — recreate with generate_synthetic_defects.py)
+├── docs/
+│   ├── END_TO_END_DOCUMENTATION.md
+│   ├── images/                   screenshots used in this README
+│   └── run_logs/                 raw output of every run
+├── data/raw/transistor/          dataset (not committed)
+└── requirements.txt
 ```
 
-## Dataset attachment
+---
 
-Place the local dataset in a MVTec-style structure under the project root or set it using an environment variable.
+## 9. AI assistance disclosure
 
-### Preferred structure
+The task allowed using an LLM for searching and for help when stuck. In that spirit, I want to be clear about where an AI assistant (Claude) was used:
+- writing `scripts/visualize_heatmaps.py` (the heatmap screenshot script) and the shared colour scale fix in it;
+- spotting and fixing a bug where `generate_synthetic_defects.py` also scored the saved `*_mask.png` files as defect images (this had inflated an earlier synthetic AUROC), and cleaning up stale outputs from an older version of the generator;
+- running the evaluations, comparing the code against the PatchCore paper, and helping structure this README and the documentation.
 
-```text
-data/
-  raw/
-    mvtec_ad/
-      transistor/
-        train/
-          good/
-        test/
-          good/
-          defect_type_1/
-          defect_type_2/
-        ground_truth/
-          defect_type_1/
-          defect_type_2/
-```
+_<Add anything else here that is relevant — e.g. other tools or references used.>_
 
-### Environment variable override
+---
 
-```powershell
-$env:ANOMALY_DATA_DIR = "C:\path\to\your\dataset"
-```
+## 10. References
 
-## Environment setup
-
-The project was run in a clean environment because the default machine install of PyTorch caused a Windows DLL initialization issue. The stable fix was to create an isolated venv and install compatible versions.
-
-### Commands
-
-```powershell
-cd "C:\Users\Ritanya\PROJECTS\Anomaly detection"
-python -m venv .venv
-.\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install torch==2.4.1 torchvision==0.19.1 scikit-learn==1.4.2 numpy==1.26.4 pillow==10.3.0 faiss-cpu==1.10.0 opencv-python==4.10.0.84 matplotlib==3.8.4 tqdm==4.9.0 pandas==2.2.2
-```
-
-### Verification
-
-```powershell
-.\.venv\Scripts\python -c "import torch, torchvision; print('torch', torch.__version__); print('torchvision', torchvision.__version__)"
-```
-
-Expected output:
-
-```text
-torch 2.4.1+cpu
-torchvision 0.19.1+cpu
-```
-
-## Quick start
-
-### 1. Activate the environment
-
-```powershell
-cd "C:\Users\Ritanya\PROJECTS\Anomaly detection"
-.\.venv\Scripts\Activate.ps1
-```
-
-### 2. Validate dataset structure
-
-```powershell
-.\.venv\Scripts\python scripts/check_dataset.py
-```
-
-### 3. Generate a contact sheet
-
-```powershell
-.\.venv\Scripts\python scripts/contact_sheet.py
-```
-
-### 4. Run the PatchCore baseline
-
-```powershell
-.\.venv\Scripts\python scripts/run_patchcore_baseline.py
-```
-
-### 5. Run synthetic defect validation
-
-```powershell
-.\.venv\Scripts\python scripts/generate_synthetic_defects.py
-```
-
-### 6. Run the regression tests
-
-```powershell
-.\.venv\Scripts\python -m unittest discover -s tests
-```
-
-## End-to-end workflow summary
-
-The project followed a practical end-to-end pipeline:
-
-1. dataset discovery and validation,
-2. contact sheet generation for visual sanity check,
-3. PatchCore feature extraction sanity check,
-4. real anomaly evaluation across the dataset,
-5. synthetic defect generation to stress-test robustness,
-6. benchmark summary and documentation.
-
-This makes the repo useful not just as a model implementation but as a reproducible project pipeline.
-
-## Implementation notes
-
-### PatchCore logic
-
-The model uses a pretrained WideResNet50 backbone and extracts patch embeddings from intermediate feature maps. These embeddings are aggregated into a memory bank of normal representative features. For a test image, the nearest-neighbor distance to the memory bank is measured and the maximum patch response is used as the image anomaly score.
-
-### Synthetic defects
-
-Synthetic defects are generated using simple but effective patterns such as:
-
-- blobs,
-- scratches,
-- line defects,
-- stains,
-- and speckle noise.
-
-These are overlaid onto normal chip/package images to check whether the model is still able to separate clean and anomalous inputs.
-
-## Hackathon readiness
-
-This repository is ready for a hackathon submission and demo because it includes:
-
-- a real dataset workflow,
-- a baseline anomaly model,
-- code for synthetic robustness testing,
-- metrics and visual outputs,
-- working validation steps,
-- and a clear technical narrative.
-
-## Detailed documentation
-
-For the complete walkthrough, commands, outputs, and end-to-end notes, see [docs/END_TO_END_DOCUMENTATION.md](docs/END_TO_END_DOCUMENTATION.md).
-
-## Notes
-
-- Keep seeds fixed across experiments for reproducibility.
-- Prefer the clean `.venv` environment for stable Windows PyTorch execution.
-- The generated synthetic defect outputs are saved under `experiments/synthetic_defects/`.
-- The benchmark summary is documented in [results/benchmark_summary.md](results/benchmark_summary.md).
+1. K. Roth, L. Pemula, J. Zepeda, B. Schölkopf, T. Brox, P. Gehler. **Towards Total Recall in Industrial Anomaly Detection.** CVPR 2022. [arXiv:2106.08265](https://arxiv.org/abs/2106.08265)
+2. P. Bergmann, M. Fauser, D. Sattlegger, C. Steger. **MVTec AD — A Comprehensive Real-World Dataset for Unsupervised Anomaly Detection.** CVPR 2019. Dataset licence: CC BY-NC-SA 4.0 (see `data/raw/transistor/license.txt`).
+3. S. Zagoruyko, N. Komodakis. **Wide Residual Networks.** BMVC 2016 (WideResNet50 backbone, ImageNet weights from torchvision).
