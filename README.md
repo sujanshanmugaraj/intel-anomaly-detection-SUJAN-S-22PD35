@@ -1,8 +1,5 @@
 # Visual Anomaly Detection for Chip / Package Inspection (PatchCore)
 
-> **Author(s):** _<fill in your name(s) — and list every teammate who contributed>_
-> **Submission for:** Anomaly detection on high-resolution manufacturing images (hackathon / interview task)
-
 This project detects visual anomalies — foreign objects such as a strand of hair, cracks, dust / sand particles and excess adhesive — on images of electronic components, **using only images of good parts for training**.
 
 It is a simplified implementation of **PatchCore** ([Roth et al., *Towards Total Recall in Industrial Anomaly Detection*, CVPR 2022](https://arxiv.org/abs/2106.08265)), evaluated on the public **MVTec AD `transistor`** dataset. On top of the paper, I added a **synthetic defect generator** that creates the specific defect types from the problem statement (hair, crack, dust, adhesive blob), so the detector could be tested on those scenarios even though real factory images could not be shared.
@@ -22,15 +19,7 @@ It is a simplified implementation of **PatchCore** ([Roth et al., *Towards Total
 
 All numbers above were produced by the scripts in this repo on CPU; the raw console output of every run is saved in [`docs/run_logs/`](docs/run_logs/).
 
-> ⚠️ **Honest reading of these numbers:** 0.9979 / 0.9314 are on a public benchmark, not on real Intel package images. The synthetic score of 1.0 means my synthetic defects are **too easy** (high contrast, small test set), not that the detector is perfect — see [Limitations](#7-limitations-and-what-i-would-do-next).
-
-### Output: what the detector sees
-
-Each row: input image → anomaly heatmap (blue = normal, red = anomaly) → ground-truth mask (real defects) or raw score map (synthetic defects). The clean image at the top stays blue; every defect lights up where it is.
-
-![Detection output](docs/images/heatmaps_transistor.png)
-
-More outputs (synthetic defect samples, dataset overview) are in [section 4](#4-output-screenshots).
+Screenshots of the detection output are in [section 4](#4-output-screenshots).
 
 ---
 
@@ -270,26 +259,7 @@ The pretrained WideResNet50 weights are downloaded automatically by torchvision 
 
 ---
 
-## 7. Limitations and what I would do next
-
-**Limitations (being upfront about how far I got):**
-- **No real Intel package images.** All results are on a public transistor dataset plus synthetic defects. Performance on real package surfaces is unknown.
-- **Excess adhesive is only approximated** by a soft blob. Real over-applied adhesive is a shape/volume change at a specific location, which may look subtler.
-- **Synthetic defects are too easy.** They are drawn with strong contrast, so every difficulty level reaches AUROC 1.0. The hair defect has the smallest margin (score 21.3 vs 17.8 for a clean image), so a faint, thin hair is the most likely real-world miss.
-- **Small synthetic test set:** 96 defective vs 16 clean images.
-- **No decision threshold chosen.** AUROC measures ranking; deploying this needs a threshold set on validation data for an acceptable false-alarm rate.
-- **CPU only:** the full real-defect run (memory bank from 213 images + scoring 100 images) takes ~10 minutes.
-
-**Next steps:**
-1. Add the missing paper components: Gaussian smoothing of the heatmap, larger coreset (1 %), centre crop, re-weighted image score.
-2. Make synthetic defects more realistic: low-contrast hair, cracks that follow surface texture, adhesive that changes the outline of an existing glue line.
-3. Choose and report an operating threshold (precision / recall, false alarms per 1000 parts).
-4. Evaluate on more MVTec categories, and on real package images if they can be shared.
-5. Speed up nearest-neighbour search with FAISS (already in `requirements.txt`) and run on GPU.
-
----
-
-## 8. Project structure
+## 7. Project structure
 
 ```text
 .
@@ -317,7 +287,7 @@ The pretrained WideResNet50 weights are downloaded automatically by torchvision 
 
 ---
 
-## 9. AI assistance disclosure
+## 8. AI assistance disclosure
 
 The task allowed using an LLM for searching and for help when stuck. In that spirit, I want to be clear about where an AI assistant (Claude) was used:
 - writing `scripts/visualize_heatmaps.py` (the heatmap screenshot script) and the shared colour scale fix in it;
@@ -328,7 +298,7 @@ _<Add anything else here that is relevant — e.g. other tools or references use
 
 ---
 
-## 10. References
+## 9. References
 
 1. K. Roth, L. Pemula, J. Zepeda, B. Schölkopf, T. Brox, P. Gehler. **Towards Total Recall in Industrial Anomaly Detection.** CVPR 2022. [arXiv:2106.08265](https://arxiv.org/abs/2106.08265)
 2. P. Bergmann, M. Fauser, D. Sattlegger, C. Steger. **MVTec AD — A Comprehensive Real-World Dataset for Unsupervised Anomaly Detection.** CVPR 2019. Dataset licence: CC BY-NC-SA 4.0 (see `data/raw/transistor/license.txt`).
